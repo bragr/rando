@@ -4,6 +4,19 @@ from PIL import Image, ImageDraw
 
 rand = random.SystemRandom()
 
+def mean_squared_error(image1_array, image2):
+    """Calculate the mean squared error between two images."""
+    return numpy.mean(numpy.square(image1_array - numpy.array(image2)))
+
+def peak_signal_to_noise_ratio(image1_array, image2):
+    """Calculate the peak signal to noise ratio between two images."""
+    mse = mean_squared_error(image1_array, image2)
+    return 10 * numpy.log10(255 ** 2 / mse)
+
+def absolute_difference(image1_array, image2):
+    """Calculate the absolute difference between two images."""
+    return numpy.sum(numpy.abs(image1_array - numpy.array(image2)))
+
 CONFIG = {
     "line": {
         "min_max_length_percent": 0.02,
@@ -12,7 +25,13 @@ CONFIG = {
         "min_max_width": 1,
         "max_max_width": 10,
         "magnitude_width_scale": 1.0
-    }
+    },
+    "comparisons": {
+        "mean_squared_error": lambda proposal_diff, diff: proposal_diff < diff,
+        "peak_signal_to_noise_ratio": lambda proposal_diff, diff: proposal_diff > diff,
+        "absolute_difference": lambda proposal_diff, diff: proposal_diff < diff
+    },
+    "metric": "peak_signal_to_noise_ratio"
 }
 
 def random_xy(image):
@@ -39,18 +58,6 @@ def draw_random_line(draw, proposal, magnitude_ratio):
     
     draw.line(start_xy + end_xy, fill=rand.randint(0, 0xFFFFFF), width=width)
 
-def mean_squared_error(image1_array, image2):
-    """Calculate the mean squared error between two images."""
-    return numpy.mean(numpy.square(image1_array - numpy.array(image2)))
-
-def peak_signal_to_noise_ratio(image1_array, image2):
-    """Calculate the peak signal to noise ratio between two images."""
-    mse = mean_squared_error(image1_array, image2)
-    return 10 * numpy.log10(255 ** 2 / mse)
-
-def absolute_difference(image1_array, image2):
-    """Calculate the absolute difference between two images."""
-    return numpy.sum(numpy.abs(image1_array - numpy.array(image2)))
 
 def main():   
     image_file = input("Enter the image file name: ")
@@ -66,7 +73,7 @@ def main():
     print(f"Black image:\tMSE: {mean_squared_error(source_array, black_image)}, PSNR: {peak_signal_to_noise_ratio(source_array, black_image)}, AD: {absolute_difference(source_array, black_image)}")
 
     target_image = grey_image
-    difference = mean_squared_error(source_array, target_image)
+    difference = CONFIG["comparisons"][CONFIG["metric"]](source_array, target_image)  # Using configurable metric
     MAX_DIFFERENCE = difference
     print(f"Initial difference: {difference}. Starting image:")
 
@@ -77,10 +84,10 @@ def main():
             proposal = target_image.copy()
             draw = ImageDraw.Draw(proposal)
             draw_random_line(draw, proposal, difference / MAX_DIFFERENCE)
-            proposal_differcence = mean_squared_error(source_array, proposal)
-            if proposal_differcence < difference:
+            proposal_difference = CONFIG["comparisons"][CONFIG["metric"]](source_array, proposal)  # Using configurable metric
+            if CONFIG["comparisons"][CONFIG["metric"]](proposal_difference, difference):
                 target_image = proposal
-                difference = proposal_differcence
+                difference = proposal_difference
                 print(f"New difference: {difference:.5f}\tFrame: {frame}\tTicks: {i}\tDifference percetage: {difference / MAX_DIFFERENCE * 100:.4f}%")
                 with open(f"frames/frame{frame:06d}.png", "wb") as f:
                     target_image.save(f)
